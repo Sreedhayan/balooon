@@ -108,6 +108,31 @@
     }
     .authors a { color: rgba(255,255,255,0.5); text-decoration: none; }
     .authors a:hover { color: var(--color-accent); }
+    /* New: Pause button */
+    .pause-btn {
+      position: fixed; top: 16px; left: 50%;
+      transform: translateX(-50%);
+      padding: 8px 20px;
+      font-size: 14px; font-weight: 600;
+      background: rgba(255,255,255,0.1);
+      color: rgba(255,255,255,0.7);
+      border: 1px solid rgba(255,255,255,0.2);
+      border-radius: 20px;
+      cursor: pointer;
+      z-index: 15;
+      transition: all 0.2s ease;
+    }
+    .pause-btn:hover {
+      background: rgba(255,255,255,0.2);
+      color: white;
+    }
+    .pause-btn.hidden { display: none; }
+    /* New: Controls hint during game */
+    .controls-hint {
+      position: fixed; bottom: 16px; left: 20px;
+      font-size: 11px; color: rgba(255,255,255,0.3);
+      pointer-events: none; z-index: 5;
+    }
   </style>
 </head>
 <body>
@@ -131,6 +156,9 @@
     </div>
   </div>
 
+  <!-- Pause Button -->
+  <button class="pause-btn hidden" id="pauseBtn">PAUSE</button>
+
   <!-- Start/End Screen -->
   <div class="overlay" id="overlay">
     <h1 id="title">🎈 Balloon Dodge</h1>
@@ -138,20 +166,21 @@
     <div class="score-display hidden" id="finalScore"></div>
     <div class="best-display hidden" id="bestScore"></div>
     <button class="btn" id="startBtn">PLAY</button>
-    <div class="hint">Move mouse or drag to control the balloon</div>
+    <div class="hint">Move mouse or drag to control the balloon<br>Press SPACE to pause</div>
   </div>
 
   <!-- Credits -->
   <div class="authors">
     Made by <a href="https://github.com/Sreedhayan">@Sreedhayan</a> & <a href="https://github.com/cosmicnerd-grb">@cosmicnerd-grb</a>
   </div>
+  <div class="controls-hint">WASD/Arrows to move | Space to pause</div>
 
   <canvas id="game"></canvas>
 
   <script>
     /**
-     * Balloon Dodge Game
-     * A fast-paced HTML5 canvas game
+     * Balloon Dodge Game v2.0
+     * Enhanced with pause, leaderboard, and new power-ups
      * Authors: Sreedhayan, cosmicnerd-grb
      */
     'use strict';
@@ -159,12 +188,13 @@
     // --- Configuration ---
     const CONFIG = Object.freeze({
       STORAGE_KEY: 'balloon_dodge_best',
+      LEADERBOARD_KEY: 'balloon_dodge_leaderboard',
       BALLOON: { x: 80, radius: 22, speed: 0.12 },
       SPAWN: { obstacleInterval: 55, powerUpInterval: 400, speedIncrease: 600 },
       COLORS: {
         balloon: { normal: ['#ffcccc', '#ee3333'], shield: ['#aaffcc', '#00aa55'] },
         spike: '#ff6b6b', block: '#aa44ff',
-        shield: '#00ff88', slow: '#4488ff', points: '#ffdd00'
+        shield: '#00ff88', slow: '#4488ff', points: '#ffdd00', magnet: '#ff88ff'
       }
     });
 
@@ -191,6 +221,23 @@
       } catch (e) { /* Audio unavailable */ }
     }
 
+    // --- Leaderboard ---
+    function getLeaderboard() {
+      try {
+        return JSON.parse(localStorage.getItem(CONFIG.LEADERBOARD_KEY) || '[]');
+      } catch { return []; }
+    }
+    function saveLeaderboard(lb) {
+      localStorage.setItem(CONFIG.LEADERBOARD_KEY, JSON.stringify(lb.slice(0, 5)));
+    }
+    function addScore(score) {
+      const lb = getLeaderboard();
+      const date = new Date().toLocaleDateString();
+      lb.push({ score, date });
+      lb.sort((a, b) => b.score - a.score);
+      saveLeaderboard(lb);
+    }
+
     // --- Game State ---
     const state = {
       canvas: null, ctx: null,
@@ -198,7 +245,7 @@
       balloons: [], obstacles: [], powerUps: [], particles: [], stars: [],
       score: 0, frame: 0, speed: 3,
       bestScore: parseInt(localStorage.getItem(CONFIG.STORAGE_KEY) || '0'),
-      running: false, animId: null,
+      running: false, paused: false, animId: null,
       input: { active: false, y: 0 },
       lastTime: 0
     };
@@ -214,7 +261,8 @@
       score: document.getElementById('score'),
       speed: document.getElementById('speed'),
       power: document.getElementById('power'),
-      best: document.getElementById('best')
+      best: document.getElementById('best'),
+      pauseBtn: document.getElementById('pauseBtn')
     };
 
     // --- Resize Handler ---
@@ -252,6 +300,7 @@
       window.addEventListener('touchmove', handleTouchMove, { passive: false });
       window.addEventListener('touchstart', handleTouchStart);
       ui.startBtn.addEventListener('click', startGame);
+      ui.pauseBtn.addEventListener('click', togglePause);
       ui.best.textContent = state.bestScore;
       resetGame();
       render();
@@ -259,7 +308,7 @@
 
     function resetGame() {
       const { width, height } = state;
-      state.balloons = [{ x: CONFIG.BALLOON.x, y: height / 2, radius: CONFIG.BALLOON.radius, shield: false, shieldTime: 0 }];
+      state.balloons = [{ x: CONFIG.BALLOON.x, y: height / 2, radius: CONFIG.BALLOON.radius, shield: false, shieldTime: 0, magnet: false, magnetTime: 0 }];
       state.obstacles = [];
       state.powerUps = [];
       state.particles = [];
@@ -274,6 +323,7 @@
       state.frame = 0;
       state.speed = 3;
       state.running = false;
+      state.paused = false;
       state.input.y = height / 2;
       state.input.active = false;
       updateHUD();
@@ -296,7 +346,7 @@
     }
 
     function spawnPowerUp() {
-      const types = ['shield', 'slow', 'points'];
+      const types = ['shield', 'slow', 'points', 'magnet'];
       state.powerUps.push({
         x: state.width + 40,
         y: 40 + Math.random() * (state.height - 80),
@@ -324,7 +374,7 @@
 
     // --- Game Logic ---
     function update() {
-      if (!state.running) return;
+      if (!state.running || state.paused) return;
 
       state.frame++;
       const balloon = state.balloons[0];
@@ -346,6 +396,12 @@
         if (balloon.shieldTime <= 0) balloon.shield = false;
       }
 
+      // Magnet timer
+      if (balloon.magnet) {
+        balloon.magnetTime--;
+        if (balloon.magnetTime <= 0) balloon.magnet = false;
+      }
+
       // Update obstacles
       state.obstacles.forEach(o => {
         o.x -= state.speed;
@@ -355,8 +411,19 @@
       });
       state.obstacles = state.obstacles.filter(o => o.x > -100);
 
-      // Update power-ups
-      state.powerUps.forEach(p => p.x -= state.speed);
+      // Update power-ups (with magnet effect)
+      state.powerUps.forEach(p => {
+        p.x -= state.speed;
+        if (balloon.magnet) {
+          const dx = balloon.x - p.x;
+          const dy = balloon.y - p.y;
+          const dist = Math.hypot(dx, dy);
+          if (dist < 150) {
+            p.x += (dx / dist) * 3;
+            p.y += (dy / dist) * 3;
+          }
+        }
+      });
       state.powerUps = state.powerUps.filter(p => p.x > -50);
 
       // Update particles
@@ -405,7 +472,8 @@
       for (let i = state.powerUps.length - 1; i >= 0; i--) {
         const p = state.powerUps[i];
         if (Math.hypot(balloon.x - p.x, balloon.y - p.y) < balloon.radius + p.radius) {
-          const colors = { shield: CONFIG.COLORS.shield, slow: CONFIG.COLORS.slow, points: CONFIG.COLORS.points };
+          const colors = { shield: CONFIG.COLORS.shield, slow: CONFIG.COLORS.slow, points: CONFIG.COLORS.points, magnet: CONFIG.COLORS.magnet };
+          const labels = { shield: 'S', slow: '<<', points: '+100', magnet: 'M' };
           spawnParticles(p.x, p.y, colors[p.type], 12);
           
           switch (p.type) {
@@ -416,16 +484,31 @@
               break;
             case 'slow':
               state.speed = Math.max(2, state.speed - 1);
-              setTimeout(() => { if (state.running) state.speed++; }, 5000);
+              setTimeout(() => { if (state.running && !state.paused) state.speed++; }, 5000);
               playSound(400, 0.2);
               break;
             case 'points':
               state.score += 100;
               playSound(1000, 0.1);
               break;
+            case 'magnet':
+              balloon.magnet = true;
+              balloon.magnetTime = 300;
+              playSound(500, 0.15);
+              break;
           }
           state.powerUps.splice(i, 1);
         }
+      }
+    }
+
+    function togglePause() {
+      if (!state.running) return;
+      state.paused = !state.paused;
+      ui.pauseBtn.textContent = state.paused ? 'RESUME' : 'PAUSE';
+      if (!state.paused) {
+        state.lastTime = performance.now();
+        gameLoop();
       }
     }
 
@@ -441,6 +524,7 @@
         state.bestScore = state.score;
         localStorage.setItem(CONFIG.STORAGE_KEY, state.bestScore);
       }
+      addScore(state.score);
       ui.best.textContent = state.bestScore;
       updateHUD();
 
@@ -453,6 +537,7 @@
         ui.bestScore.classList.remove('hidden');
         ui.startBtn.textContent = 'PLAY AGAIN';
         ui.overlay.classList.remove('hidden');
+        ui.pauseBtn.classList.add('hidden');
       }, 600);
     }
 
@@ -509,7 +594,7 @@
       ctx.translate(b.x, b.y);
 
       // Outer glow
-      const glowColor = b.shield ? 'rgba(0,255,100,0.3)' : 'rgba(255,100,100,0.3)';
+      const glowColor = b.shield ? 'rgba(0,255,100,0.3)' : b.magnet ? 'rgba(255,136,255,0.3)' : 'rgba(255,100,100,0.3)';
       const glow = ctx.createRadialGradient(0, 0, b.radius * 0.3, 0, 0, b.radius * 2.5);
       glow.addColorStop(0, glowColor);
       glow.addColorStop(1, 'transparent');
@@ -520,7 +605,7 @@
 
       // Balloon body gradient
       const grad = ctx.createRadialGradient(-b.radius * 0.3, -b.radius * 0.3, b.radius * 0.1, 0, 0, b.radius);
-      const [topColor, bottomColor] = b.shield ? CONFIG.COLORS.balloon.shield : CONFIG.COLORS.balloon.normal;
+      const [topColor, bottomColor] = b.shield ? CONFIG.COLORS.balloon.shield : b.magnet ? ['#ffccff', '#ff00ff'] : CONFIG.COLORS.balloon.normal;
       grad.addColorStop(0, topColor);
       grad.addColorStop(1, bottomColor);
       ctx.fillStyle = grad;
@@ -541,12 +626,21 @@
         ctx.beginPath();
         ctx.arc(0, 0, b.radius + 10, 0, Math.PI * 2);
         ctx.stroke();
-        
-        // Shield animation
         ctx.strokeStyle = 'rgba(0, 255, 100, 0.3)';
         ctx.beginPath();
         ctx.arc(0, 0, b.radius + 15 + Math.sin(Date.now() * 0.01) * 3, 0, Math.PI * 2);
         ctx.stroke();
+      }
+
+      // Magnet field
+      if (b.magnet) {
+        ctx.strokeStyle = 'rgba(255, 136, 255, 0.4)';
+        ctx.lineWidth = 1;
+        ctx.setLineDash([5, 5]);
+        ctx.beginPath();
+        ctx.arc(0, 0, 60 + Math.sin(Date.now() * 0.005) * 10, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.setLineDash([]);
       }
 
       ctx.restore();
@@ -576,8 +670,6 @@
         ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
         ctx.lineWidth = 1;
         ctx.strokeRect(-o.width / 2, -o.height / 2, o.width, o.height);
-        
-        // Inner detail
         ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
         ctx.fillRect(-o.width / 4, -o.height / 4, o.width / 2, o.height / 2);
       }
@@ -589,8 +681,8 @@
       p.pulse += 0.08;
       const pulseR = p.radius + Math.sin(p.pulse) * 4;
       
-      const colors = { shield: CONFIG.COLORS.shield, slow: CONFIG.COLORS.slow, points: CONFIG.COLORS.points };
-      const labels = { shield: 'S', slow: '<<', points: '+100' };
+      const colors = { shield: CONFIG.COLORS.shield, slow: CONFIG.COLORS.slow, points: CONFIG.COLORS.points, magnet: CONFIG.COLORS.magnet };
+      const labels = { shield: 'S', slow: '<<', points: '+100', magnet: 'M' };
       
       ctx.save();
       ctx.translate(p.x, p.y);
@@ -621,18 +713,21 @@
       ui.score.textContent = state.score;
       ui.speed.textContent = state.speed + 'x';
       const balloon = state.balloons[0];
-      ui.power.textContent = balloon && balloon.shield ? Math.ceil(balloon.shieldTime / 60) + 's' : '--';
+      if (balloon && balloon.shield) {
+        ui.power.textContent = Math.ceil(balloon.shieldTime / 60) + 's';
+      } else if (balloon && balloon.magnet) {
+        ui.power.textContent = Math.ceil(balloon.magnetTime / 60) + 's';
+      } else {
+        ui.power.textContent = '--';
+      }
     }
 
     // --- Game Loop ---
     function gameLoop() {
+      if (!state.running || state.paused) return;
       update();
       render();
-      if (state.running) {
-        state.animId = requestAnimationFrame(gameLoop);
-      } else {
-        render(); // Final frame for particles
-      }
+      state.animId = requestAnimationFrame(gameLoop);
     }
 
     function startGame() {
@@ -644,11 +739,18 @@
       ui.title.textContent = '🎈 Balloon Dodge';
       ui.tagline.textContent = 'Dodge obstacles, collect power-ups!';
       state.running = true;
+      ui.pauseBtn.classList.remove('hidden');
+      state.lastTime = performance.now();
       gameLoop();
     }
 
-    // --- Keyboard Controls (Accessibility) ---
+    // --- Keyboard Controls ---
     function handleKeyDown(e) {
+      if (e.key === ' ' || e.key === 'Spacebar') {
+        e.preventDefault();
+        togglePause();
+        return;
+      }
       const speed = 20;
       switch(e.key) {
         case 'ArrowUp':
@@ -666,7 +768,6 @@
           e.preventDefault();
           break;
       }
-      // Clamp to canvas bounds
       state.input.y = Math.max(50, Math.min(state.height - 50, state.input.y));
     }
     document.addEventListener('keydown', handleKeyDown);
