@@ -2,265 +2,343 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <title>Balloon Dodge</title>
   <style>
+    :root {
+      --color-bg: #0a0a1a;
+      --color-text: #fff;
+      --color-accent: #a855f7;
+      --color-success: #00ff88;
+      --color-warning: #ffdd00;
+      --color-danger: #ff6b6b;
+    }
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body {
-      background: #0a0a1a;
+    html, body {
+      width: 100%; height: 100%;
+      background: var(--color-bg);
       overflow: hidden;
-      font-family: 'Segoe UI', system-ui, sans-serif;
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
       touch-action: none;
       -webkit-tap-highlight-color: transparent;
     }
-    canvas { display: block; }
-    #hud {
-      position: fixed; top: 0; left: 0; right: 0;
-      padding: 12px 20px;
-      display: flex; justify-content: space-between; align-items: center;
-      color: #fff; font-size: 16px; pointer-events: none; z-index: 10;
-      background: linear-gradient(to bottom, rgba(0,0,0,0.5), transparent);
+    canvas {
+      display: block;
+      width: 100%; height: 100%;
     }
-    #hud .stat { text-align: center; }
-    #hud .label { font-size: 11px; color: #888; text-transform: uppercase; letter-spacing: 1px; }
-    #hud .value { font-size: 22px; font-weight: bold; color: #fff; }
-    #hud .value.power { color: #4f8; }
-    #overlay {
+    
+    /* HUD */
+    .hud {
+      position: fixed; top: 0; left: 0; right: 0;
+      padding: 16px 24px;
+      display: flex; justify-content: space-between; align-items: flex-start;
+      pointer-events: none; z-index: 10;
+      background: linear-gradient(to bottom, rgba(0,0,0,0.6), transparent);
+    }
+    .hud-stat { text-align: center; }
+    .hud-label {
+      font-size: 11px; color: rgba(255,255,255,0.5);
+      text-transform: uppercase; letter-spacing: 2px;
+      margin-bottom: 4px;
+    }
+    .hud-value {
+      font-size: 28px; font-weight: 700; color: var(--color-text);
+      line-height: 1;
+    }
+    .hud-value.speed { color: var(--color-warning); }
+    .hud-value.power { color: var(--color-success); }
+    
+    /* Overlay screens */
+    .overlay {
       position: fixed; inset: 0;
       display: flex; flex-direction: column; justify-content: center; align-items: center;
-      background: rgba(5,5,20,0.85); z-index: 20;
-      backdrop-filter: blur(4px);
+      background: rgba(10, 10, 26, 0.9);
+      backdrop-filter: blur(8px);
+      z-index: 20;
+      opacity: 1;
+      transition: opacity 0.3s ease;
     }
-    #overlay.hidden { display: none; }
-    #overlay h1 {
-      font-size: 48px; color: #fff; margin-bottom: 8px;
-      text-shadow: 0 0 20px #f0f, 0 0 40px #f0f;
+    .overlay.hidden {
+      opacity: 0;
+      pointer-events: none;
     }
-    #overlay .subtitle { color: #aaa; font-size: 16px; margin-bottom: 32px; }
-    #overlay .final-score { font-size: 28px; color: #fff; margin-bottom: 4px; }
-    #overlay .best { font-size: 16px; color: #4f8; margin-bottom: 24px; }
-    #overlay button {
-      padding: 14px 48px; font-size: 18px; font-weight: bold;
-      background: linear-gradient(135deg, #6366f1, #a855f7);
-      color: #fff; border: none; border-radius: 30px; cursor: pointer;
-      box-shadow: 0 4px 20px rgba(168,85,247,0.4);
-      transition: transform 0.15s, box-shadow 0.15s;
+    .overlay h1 {
+      font-size: clamp(36px, 8vw, 64px);
+      color: var(--color-text);
+      margin-bottom: 12px;
+      text-shadow: 0 0 30px var(--color-accent), 0 0 60px var(--color-accent);
+      text-align: center;
     }
-    #overlay button:hover { transform: scale(1.05); box-shadow: 0 6px 28px rgba(168,85,247,0.6); }
-    #overlay .hint { margin-top: 20px; font-size: 13px; color: #666; }
+    .overlay .tagline {
+      font-size: 18px; color: rgba(255,255,255,0.7);
+      margin-bottom: 40px; text-align: center;
+    }
+    .overlay .score-display {
+      font-size: 32px; color: var(--color-text);
+      margin-bottom: 8px;
+    }
+    .overlay .best-display {
+      font-size: 16px; color: var(--color-success);
+      margin-bottom: 32px;
+    }
+    .btn {
+      padding: 16px 48px;
+      font-size: 20px; font-weight: 600;
+      background: linear-gradient(135deg, #6366f1, var(--color-accent));
+      color: white;
+      border: none; border-radius: 50px;
+      cursor: pointer;
+      box-shadow: 0 4px 20px rgba(168, 85, 247, 0.4);
+      transition: all 0.2s ease;
+    }
+    .btn:hover {
+      transform: translateY(-2px) scale(1.05);
+      box-shadow: 0 8px 30px rgba(168, 85, 247, 0.6);
+    }
+    .btn:active { transform: translateY(0) scale(0.98); }
+    .hint {
+      margin-top: 24px;
+      font-size: 14px; color: rgba(255,255,255,0.4);
+      text-align: center;
+    }
+    .authors {
+      position: fixed; bottom: 16px; right: 20px;
+      font-size: 12px; color: rgba(255,255,255,0.3);
+      pointer-events: none; z-index: 5;
+    }
+    .authors a { color: rgba(255,255,255,0.5); text-decoration: none; }
+    .authors a:hover { color: var(--color-accent); }
   </style>
 </head>
 <body>
-  <div id="hud">
-    <div class="stat"><div class="label">Score</div><div class="value" id="score">0</div></div>
-    <div class="stat"><div class="label">Speed</div><div class="value" id="speed">1x</div></div>
-    <div class="stat"><div class="label">Power</div><div class="value power" id="power">--</div></div>
-    <div class="stat"><div class="label">Best</div><div class="value" id="best">0</div></div>
+  <!-- HUD -->
+  <div class="hud">
+    <div class="hud-stat">
+      <div class="hud-label">Score</div>
+      <div class="hud-value" id="score">0</div>
+    </div>
+    <div class="hud-stat">
+      <div class="hud-label">Speed</div>
+      <div class="hud-value speed" id="speed">1x</div>
+    </div>
+    <div class="hud-stat">
+      <div class="hud-label">Power</div>
+      <div class="hud-value power" id="power">--</div>
+    </div>
+    <div class="hud-stat">
+      <div class="hud-label">Best</div>
+      <div class="hud-value" id="best">0</div>
+    </div>
   </div>
 
-  <div id="overlay">
-    <h1>🎈 Balloon Dodge</h1>
-    <div class="subtitle">Dodge spikes & blocks, grab power-ups!</div>
-    <button id="startBtn">PLAY</button>
+  <!-- Start/End Screen -->
+  <div class="overlay" id="overlay">
+    <h1 id="title">🎈 Balloon Dodge</h1>
+    <div class="tagline" id="tagline">Dodge obstacles, collect power-ups!</div>
+    <div class="score-display hidden" id="finalScore"></div>
+    <div class="best-display hidden" id="bestScore"></div>
+    <button class="btn" id="startBtn">PLAY</button>
     <div class="hint">Move mouse or drag to control the balloon</div>
+  </div>
+
+  <!-- Credits -->
+  <div class="authors">
+    Made by <a href="https://github.com/Sreedhayan">@Sreedhayan</a> & <a href="https://github.com/cosmicnerd-grb">@cosmicnerd-grb</a>
   </div>
 
   <canvas id="game"></canvas>
 
   <script>
-    const canvas = document.getElementById('game');
-    const ctx = canvas.getContext('2d');
-    const overlay = document.getElementById('overlay');
-    const scoreEl = document.getElementById('score');
-    const speedEl = document.getElementById('speed');
-    const powerEl = document.getElementById('power');
-    const bestEl = document.getElementById('best');
-    const startBtn = document.getElementById('startBtn');
+    /**
+     * Balloon Dodge Game
+     * A fast-paced HTML5 canvas game
+     * Authors: Sreedhayan, cosmicnerd-grb
+     */
+    'use strict';
 
-    let W, H;
-    function resize() {
-      W = canvas.width = window.innerWidth;
-      H = canvas.height = window.innerHeight;
+    // --- Configuration ---
+    const CONFIG = Object.freeze({
+      STORAGE_KEY: 'balloon_dodge_best',
+      BALLOON: { x: 80, radius: 22, speed: 0.12 },
+      SPAWN: { obstacleInterval: 55, powerUpInterval: 400, speedIncrease: 600 },
+      COLORS: {
+        balloon: { normal: ['#ffcccc', '#ee3333'], shield: ['#aaffcc', '#00aa55'] },
+        spike: '#ff6b6b', block: '#aa44ff',
+        shield: '#00ff88', slow: '#4488ff', points: '#ffdd00'
+      }
+    });
+
+    // --- Audio Context for sound effects ---
+    let audioCtx = null;
+    function initAudio() {
+      if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      }
     }
-    resize();
-    window.addEventListener('resize', resize);
+    function playSound(freq, duration = 0.15, type = 'sine') {
+      if (!audioCtx) return;
+      try {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.frequency.value = freq;
+        osc.type = type;
+        gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + duration);
+        osc.start();
+        osc.stop(audioCtx.currentTime + duration);
+      } catch (e) { /* Audio unavailable */ }
+    }
 
-    // --- State ---
-    let balloon, obstacles, powerUps, particles, stars;
-    let score, frame, speed, gameRunning, animId;
-    let mouseY, inputActive;
-    let bestScore = parseInt(localStorage.getItem('balloonBest') || '0');
-    bestEl.textContent = bestScore;
+    // --- Game State ---
+    const state = {
+      canvas: null, ctx: null,
+      width: 0, height: 0,
+      balloons: [], obstacles: [], powerUps: [], particles: [], stars: [],
+      score: 0, frame: 0, speed: 3,
+      bestScore: parseInt(localStorage.getItem(CONFIG.STORAGE_KEY) || '0'),
+      running: false, animId: null,
+      input: { active: false, y: 0 },
+      lastTime: 0
+    };
 
-    // --- Init ---
+    // --- UI Elements ---
+    const ui = {
+      overlay: document.getElementById('overlay'),
+      title: document.getElementById('title'),
+      tagline: document.getElementById('tagline'),
+      finalScore: document.getElementById('finalScore'),
+      bestScore: document.getElementById('bestScore'),
+      startBtn: document.getElementById('startBtn'),
+      score: document.getElementById('score'),
+      speed: document.getElementById('speed'),
+      power: document.getElementById('power'),
+      best: document.getElementById('best')
+    };
+
+    // --- Resize Handler ---
+    function resize() {
+      state.width = window.innerWidth;
+      state.height = window.innerHeight;
+      if (state.canvas) {
+        state.canvas.width = state.width;
+        state.canvas.height = state.height;
+      }
+    }
+
+    // --- Input Handlers ---
+    function handleMouseMove(e) {
+      state.input.y = e.clientY;
+      state.input.active = true;
+    }
+    function handleTouchMove(e) {
+      e.preventDefault();
+      state.input.y = e.touches[0].clientY;
+      state.input.active = true;
+    }
+    function handleTouchStart(e) {
+      state.input.y = e.touches[0].clientY;
+      state.input.active = true;
+    }
+
+    // --- Initialization ---
     function init() {
-      balloon = { x: 80, y: H / 2, r: 22, shield: false, shieldTime: 0 };
-      obstacles = [];
-      powerUps = [];
-      particles = [];
-      stars = Array.from({ length: 80 }, () => ({
-        x: Math.random() * W, y: Math.random() * H,
-        r: Math.random() * 1.5 + 0.5, twinkle: Math.random() * Math.PI * 2
+      state.canvas = document.getElementById('game');
+      state.ctx = state.canvas.getContext('2d');
+      resize();
+      window.addEventListener('resize', resize);
+      window.addEventListener('mousemove', handleMouseMove);
+      window.addEventListener('touchmove', handleTouchMove, { passive: false });
+      window.addEventListener('touchstart', handleTouchStart);
+      ui.startBtn.addEventListener('click', startGame);
+      ui.best.textContent = state.bestScore;
+      resetGame();
+      render();
+    }
+
+    function resetGame() {
+      const { width, height } = state;
+      state.balloons = [{ x: CONFIG.BALLOON.x, y: height / 2, radius: CONFIG.BALLOON.radius, shield: false, shieldTime: 0 }];
+      state.obstacles = [];
+      state.powerUps = [];
+      state.particles = [];
+      state.stars = Array.from({ length: 100 }, () => ({
+        x: Math.random() * width,
+        y: Math.random() * height,
+        radius: Math.random() * 1.5 + 0.5,
+        twinkle: Math.random() * Math.PI * 2,
+        speed: Math.random() * 0.5 + 0.2
       }));
-      score = 0; frame = 0; speed = 3;
-      mouseY = H / 2; inputActive = false;
+      state.score = 0;
+      state.frame = 0;
+      state.speed = 3;
+      state.running = false;
+      state.input.y = height / 2;
+      state.input.active = false;
       updateHUD();
     }
 
-    function startGame() {
-      init();
-      overlay.classList.add('hidden');
-      gameRunning = true;
-      loop();
-    }
-
-    // --- Input ---
-    document.addEventListener('mousemove', e => { mouseY = e.clientY; inputActive = true; });
-    document.addEventListener('touchmove', e => {
-      e.preventDefault();
-      mouseY = e.touches[0].clientY;
-      inputActive = true;
-    }, { passive: false });
-    document.addEventListener('touchstart', e => {
-      mouseY = e.touches[0].clientY;
-      inputActive = true;
-    });
-
-    startBtn.addEventListener('click', startGame);
-
     // --- Spawners ---
     function spawnObstacle() {
-      const type = Math.random() < 0.45 ? 'spike' : 'block';
+      const type = Math.random() < 0.5 ? 'spike' : 'block';
       const size = 30 + Math.random() * 40;
-      const side = Math.random() < 0.5 ? 1 : -1;
-      obstacles.push({
-        x: W + 60, y: Math.random() * (H - 60) + 30,
-        w: size, h: size, type,
-        vy: side * (1 + Math.random() * 2),
-        rot: 0, rotSpeed: (Math.random() - 0.5) * 0.05
+      const direction = Math.random() < 0.5 ? 1 : -1;
+      state.obstacles.push({
+        x: state.width + 50,
+        y: 50 + Math.random() * (state.height - 100),
+        width: size, height: size,
+        type,
+        vy: direction * (1 + Math.random() * 2),
+        rotation: 0,
+        rotSpeed: (Math.random() - 0.5) * 0.05
       });
     }
 
     function spawnPowerUp() {
       const types = ['shield', 'slow', 'points'];
-      powerUps.push({
-        x: W + 40, y: Math.random() * (H - 40) + 20,
-        r: 14, type: types[Math.floor(Math.random() * types.length)],
+      state.powerUps.push({
+        x: state.width + 40,
+        y: 40 + Math.random() * (state.height - 80),
+        radius: 14,
+        type: types[Math.floor(Math.random() * types.length)],
         pulse: 0
       });
     }
 
-    function spawnParticles(x, y, color, count = 8) {
+    function spawnParticles(x, y, color, count = 10) {
       for (let i = 0; i < count; i++) {
-        const angle = (Math.PI * 2 * i) / count + Math.random() * 0.5;
-        const spd = 2 + Math.random() * 3;
-        particles.push({ x, y, vx: Math.cos(angle) * spd, vy: Math.sin(angle) * spd,
-          life: 1, color, r: 3 + Math.random() * 3 });
+        const angle = (Math.PI * 2 * i) / count;
+        const speed = 2 + Math.random() * 3;
+        state.particles.push({
+          x, y,
+          vx: Math.cos(angle) * speed,
+          vy: Math.sin(angle) * speed,
+          life: 1,
+          decay: 0.02 + Math.random() * 0.02,
+          color,
+          radius: 3 + Math.random() * 3
+        });
       }
     }
 
-    // --- Draw helpers ---
-    function drawBalloon(x, y, r, shield) {
-      ctx.save();
-      // Glow
-      const glow = ctx.createRadialGradient(x, y, r * 0.3, x, y, r * 2);
-      glow.addColorStop(0, shield ? 'rgba(0,255,100,0.3)' : 'rgba(255,100,100,0.3)');
-      glow.addColorStop(1, 'transparent');
-      ctx.fillStyle = glow;
-      ctx.beginPath(); ctx.arc(x, y, r * 2, 0, Math.PI * 2); ctx.fill();
-
-      // Balloon body
-      const grad = ctx.createRadialGradient(x - r * 0.3, y - r * 0.3, r * 0.1, x, y, r);
-      if (shield) {
-        grad.addColorStop(0, '#aaffcc'); grad.addColorStop(1, '#00aa55');
-      } else {
-        grad.addColorStop(0, '#ffcccc'); grad.addColorStop(1, '#ee3333');
-      }
-      ctx.fillStyle = grad;
-      ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
-
-      // Highlight
-      ctx.fillStyle = 'rgba(255,255,255,0.4)';
-      ctx.beginPath(); ctx.arc(x - r * 0.25, y - r * 0.3, r * 0.3, 0, Math.PI * 2); ctx.fill();
-
-      // Shield ring
-      if (shield) {
-        ctx.strokeStyle = 'rgba(0,255,100,0.6)';
-        ctx.lineWidth = 2;
-        ctx.beginPath(); ctx.arc(x, y, r + 8, 0, Math.PI * 2); ctx.stroke();
-      }
-      ctx.restore();
-    }
-
-    function drawObstacle(o) {
-      ctx.save();
-      ctx.translate(o.x, o.y);
-      ctx.rotate(o.rot);
-      if (o.type === 'spike') {
-        ctx.fillStyle = '#ff6b6b';
-        ctx.shadowColor = '#ff0000';
-        ctx.shadowBlur = 10;
-        ctx.beginPath();
-        ctx.moveTo(0, -o.h / 2);
-        ctx.lineTo(o.w / 2, o.h / 2);
-        ctx.lineTo(-o.w / 2, o.h / 2);
-        ctx.closePath();
-        ctx.fill();
-      } else {
-        ctx.fillStyle = '#aa44ff';
-        ctx.shadowColor = '#8800ff';
-        ctx.shadowBlur = 8;
-        ctx.fillRect(-o.w / 2, -o.h / 2, o.w, o.h);
-        ctx.strokeStyle = '#cc88ff';
-        ctx.lineWidth = 1;
-        ctx.strokeRect(-o.w / 2, -o.h / 2, o.w, o.h);
-      }
-      ctx.restore();
-    }
-
-    function drawPowerUp(p) {
-      ctx.save();
-      p.pulse += 0.1;
-      const pulseR = p.r + Math.sin(p.pulse) * 3;
-      const colors = { shield: '#00ff88', slow: '#4488ff', points: '#ffdd00' };
-      const labels = { shield: 'S', slow: '<<', points: '+100' };
-      ctx.shadowColor = colors[p.type];
-      ctx.shadowBlur = 12;
-      ctx.fillStyle = colors[p.type];
-      ctx.beginPath(); ctx.arc(p.x, p.y, pulseR, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = '#000';
-      ctx.font = 'bold 10px monospace';
-      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      ctx.fillText(labels[p.type], p.x, p.y);
-      ctx.restore();
-    }
-
-    function drawStar(s) {
-      s.twinkle += 0.02;
-      const alpha = 0.4 + Math.sin(s.twinkle) * 0.3;
-      ctx.fillStyle = `rgba(255,255,255,${alpha})`;
-      ctx.beginPath(); ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2); ctx.fill();
-    }
-
-    function drawParticle(p) {
-      ctx.globalAlpha = p.life;
-      ctx.fillStyle = p.color;
-      ctx.beginPath(); ctx.arc(p.x, p.y, p.r * p.life, 0, Math.PI * 2); ctx.fill();
-      ctx.globalAlpha = 1;
-    }
-
-    // --- Update ---
+    // --- Game Logic ---
     function update() {
-      if (!gameRunning) return;
-      frame++;
+      if (!state.running) return;
 
-      // Smooth follow
-      if (inputActive) balloon.y += (mouseY - balloon.y) * 0.12;
-      balloon.y = Math.max(balloon.r, Math.min(H - balloon.r, balloon.y));
+      state.frame++;
+      const balloon = state.balloons[0];
 
-      // Spawn
-      if (frame % Math.max(25, 55 - Math.floor(speed * 2)) === 0) spawnObstacle();
-      if (frame % 400 === 0) spawnPowerUp();
+      // Smooth movement
+      if (state.input.active) {
+        balloon.y += (state.input.y - balloon.y) * CONFIG.BALLOON.speed;
+      }
+      balloon.y = Math.max(balloon.radius, Math.min(state.height - balloon.radius, balloon.y));
+
+      // Spawn logic
+      const obstacleInterval = Math.max(25, CONFIG.SPAWN.obstacleInterval - Math.floor(state.speed * 2));
+      if (state.frame % obstacleInterval === 0) spawnObstacle();
+      if (state.frame % CONFIG.SPAWN.powerUpInterval === 0) spawnPowerUp();
 
       // Shield timer
       if (balloon.shield) {
@@ -268,37 +346,54 @@
         if (balloon.shieldTime <= 0) balloon.shield = false;
       }
 
-      // Obstacles
-      for (let o of obstacles) {
-        o.x -= speed;
+      // Update obstacles
+      state.obstacles.forEach(o => {
+        o.x -= state.speed;
         o.y += o.vy;
-        o.rot += o.rotSpeed;
-        if (o.y < o.h / 2 || o.y > H - o.h / 2) o.vy *= -1;
-      }
-      obstacles = obstacles.filter(o => o.x > -80);
+        o.rotation += o.rotSpeed;
+        if (o.y < o.height / 2 || o.y > state.height - o.height / 2) o.vy *= -1;
+      });
+      state.obstacles = state.obstacles.filter(o => o.x > -100);
 
-      // Power-ups
-      for (let p of powerUps) p.x -= speed;
-      powerUps = powerUps.filter(p => p.x > -30);
+      // Update power-ups
+      state.powerUps.forEach(p => p.x -= state.speed);
+      state.powerUps = state.powerUps.filter(p => p.x > -50);
 
-      // Particles
-      for (let p of particles) {
-        p.x += p.vx; p.y += p.vy;
-        p.vx *= 0.96; p.vy *= 0.96;
-        p.life -= 0.03;
-      }
-      particles = particles.filter(p => p.life > 0);
+      // Update particles
+      state.particles.forEach(p => {
+        p.x += p.vx;
+        p.y += p.vy;
+        p.vx *= 0.96;
+        p.vy *= 0.96;
+        p.life -= p.decay;
+      });
+      state.particles = state.particles.filter(p => p.life > 0);
 
-      // Collision - obstacles
-      for (let i = obstacles.length - 1; i >= 0; i--) {
-        const o = obstacles[i];
-        const dx = balloon.x - o.x, dy = balloon.y - o.y;
-        const hitDist = o.type === 'spike' ? balloon.r + o.h * 0.4 : balloon.r + o.w / 2;
+      // Collision detection
+      checkCollisions();
+
+      // Score and difficulty
+      state.score++;
+      if (state.frame % CONFIG.SPAWN.speedIncrease === 0) state.speed++;
+      updateHUD();
+    }
+
+    function checkCollisions() {
+      const balloon = state.balloons[0];
+
+      // Obstacles
+      for (let i = state.obstacles.length - 1; i >= 0; i--) {
+        const o = state.obstacles[i];
+        const dx = balloon.x - o.x;
+        const dy = balloon.y - o.y;
+        const hitDist = o.type === 'spike' ? balloon.radius + o.height * 0.4 : balloon.radius + o.width / 2;
+        
         if (Math.hypot(dx, dy) < hitDist) {
           if (balloon.shield) {
             balloon.shield = false;
-            spawnParticles(o.x, o.y, '#00ff88', 12);
-            obstacles.splice(i, 1);
+            spawnParticles(o.x, o.y, CONFIG.COLORS.shield, 12);
+            playSound(800, 0.1);
+            state.obstacles.splice(i, 1);
           } else {
             gameOver();
             return;
@@ -306,86 +401,254 @@
         }
       }
 
-      // Collision - power-ups
-      for (let i = powerUps.length - 1; i >= 0; i--) {
-        const p = powerUps[i];
-        if (Math.hypot(balloon.x - p.x, balloon.y - p.y) < balloon.r + p.r) {
-          spawnParticles(p.x, p.y, p.type === 'shield' ? '#00ff88' : p.type === 'slow' ? '#4488ff' : '#ffdd00', 10);
-          if (p.type === 'shield') { balloon.shield = true; balloon.shieldTime = 300; }
-          else if (p.type === 'slow') { speed = Math.max(2, speed - 1); setTimeout(() => { if (gameRunning) speed++; }, 5000); }
-          else score += 100;
-          powerUps.splice(i, 1);
+      // Power-ups
+      for (let i = state.powerUps.length - 1; i >= 0; i--) {
+        const p = state.powerUps[i];
+        if (Math.hypot(balloon.x - p.x, balloon.y - p.y) < balloon.radius + p.radius) {
+          const colors = { shield: CONFIG.COLORS.shield, slow: CONFIG.COLORS.slow, points: CONFIG.COLORS.points };
+          spawnParticles(p.x, p.y, colors[p.type], 12);
+          
+          switch (p.type) {
+            case 'shield':
+              balloon.shield = true;
+              balloon.shieldTime = 300;
+              playSound(600, 0.15);
+              break;
+            case 'slow':
+              state.speed = Math.max(2, state.speed - 1);
+              setTimeout(() => { if (state.running) state.speed++; }, 5000);
+              playSound(400, 0.2);
+              break;
+            case 'points':
+              state.score += 100;
+              playSound(1000, 0.1);
+              break;
+          }
+          state.powerUps.splice(i, 1);
         }
       }
-
-      score++;
-      if (frame % 600 === 0) speed++;
-      updateHUD();
-    }
-
-    function updateHUD() {
-      scoreEl.textContent = score;
-      speedEl.textContent = speed + 'x';
-      powerEl.textContent = balloon.shield ? Math.ceil(balloon.shieldTime / 60) + 's' : '--';
     }
 
     function gameOver() {
-      gameRunning = false;
-      cancelAnimationFrame(animId);
-      spawnParticles(balloon.x, balloon.y, '#ff4444', 20);
-      if (score > bestScore) {
-        bestScore = score;
-        localStorage.setItem('balloonBest', bestScore);
+      state.running = false;
+      cancelAnimationFrame(state.animId);
+      
+      const balloon = state.balloons[0];
+      spawnParticles(balloon.x, balloon.y, CONFIG.COLORS.danger, 25);
+      playSound(200, 0.3, 'sawtooth');
+
+      if (state.score > state.bestScore) {
+        state.bestScore = state.score;
+        localStorage.setItem(CONFIG.STORAGE_KEY, state.bestScore);
       }
-      bestEl.textContent = bestScore;
+      ui.best.textContent = state.bestScore;
+      updateHUD();
+
       setTimeout(() => {
-        overlay.querySelector('h1').textContent = 'Game Over';
-        overlay.querySelector('.subtitle').textContent = '';
-        const fs = overlay.querySelector('.final-score');
-        const bt = overlay.querySelector('.best');
-        if (!fs) {
-          overlay.insertAdjacentHTML('beforeend', '<div class="final-score">Score: ' + score + '</div><div class="best">Best: ' + bestScore + '</div>');
-        } else {
-          fs.textContent = 'Score: ' + score;
-          bt.textContent = 'Best: ' + bestScore;
-        }
-        startBtn.textContent = 'PLAY AGAIN';
-        overlay.classList.remove('hidden');
-      }, 500);
+        ui.title.textContent = 'Game Over';
+        ui.tagline.textContent = '';
+        ui.finalScore.textContent = `Score: ${state.score}`;
+        ui.bestScore.textContent = `Best: ${state.bestScore}`;
+        ui.finalScore.classList.remove('hidden');
+        ui.bestScore.classList.remove('hidden');
+        ui.startBtn.textContent = 'PLAY AGAIN';
+        ui.overlay.classList.remove('hidden');
+      }, 600);
     }
 
-    // --- Render ---
-    function draw() {
-      ctx.clearRect(0, 0, W, H);
-
-      // Background gradient
-      const bg = ctx.createLinearGradient(0, 0, 0, H);
-      bg.addColorStop(0, '#0a0a1a'); bg.addColorStop(1, '#1a1030');
+    // --- Rendering ---
+    function render() {
+      const { ctx, width, height } = state;
+      
+      // Clear and draw background
+      ctx.clearRect(0, 0, width, height);
+      
+      const bg = ctx.createLinearGradient(0, 0, 0, height);
+      bg.addColorStop(0, '#0a0a1a');
+      bg.addColorStop(1, '#1a1030');
       ctx.fillStyle = bg;
-      ctx.fillRect(0, 0, W, H);
+      ctx.fillRect(0, 0, width, height);
 
-      // Stars
-      stars.forEach(drawStar);
+      // Draw stars
+      state.stars.forEach(star => {
+        star.twinkle += 0.02;
+        star.x -= star.speed * (state.speed / 3);
+        if (star.x < 0) star.x = width;
+        const alpha = 0.4 + Math.sin(star.twinkle) * 0.3;
+        ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
+        ctx.beginPath();
+        ctx.arc(star.x, star.y, star.radius, 0, Math.PI * 2);
+        ctx.fill();
+      });
 
-      // Particles
-      particles.forEach(drawParticle);
+      // Draw particles
+      state.particles.forEach(p => {
+        ctx.globalAlpha = p.life;
+        ctx.fillStyle = p.color;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.radius * p.life, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+      });
 
-      // Game objects
-      obstacles.forEach(drawObstacle);
-      powerUps.forEach(drawPowerUp);
-      if (gameRunning) drawBalloon(balloon.x, balloon.y, balloon.r, balloon.shield);
+      // Draw obstacles
+      state.obstacles.forEach(drawObstacle);
+
+      // Draw power-ups
+      state.powerUps.forEach(drawPowerUp);
+
+      // Draw balloon
+      if (state.balloons.length > 0) {
+        drawBalloon(state.balloons[0]);
+      }
     }
 
-    function loop() {
+    function drawBalloon(b) {
+      const { ctx } = state;
+      ctx.save();
+      ctx.translate(b.x, b.y);
+
+      // Outer glow
+      const glowColor = b.shield ? 'rgba(0,255,100,0.3)' : 'rgba(255,100,100,0.3)';
+      const glow = ctx.createRadialGradient(0, 0, b.radius * 0.3, 0, 0, b.radius * 2.5);
+      glow.addColorStop(0, glowColor);
+      glow.addColorStop(1, 'transparent');
+      ctx.fillStyle = glow;
+      ctx.beginPath();
+      ctx.arc(0, 0, b.radius * 2.5, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Balloon body gradient
+      const grad = ctx.createRadialGradient(-b.radius * 0.3, -b.radius * 0.3, b.radius * 0.1, 0, 0, b.radius);
+      const [topColor, bottomColor] = b.shield ? CONFIG.COLORS.balloon.shield : CONFIG.COLORS.balloon.normal;
+      grad.addColorStop(0, topColor);
+      grad.addColorStop(1, bottomColor);
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.arc(0, 0, b.radius, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Highlight
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
+      ctx.beginPath();
+      ctx.arc(-b.radius * 0.25, -b.radius * 0.3, b.radius * 0.3, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Shield ring
+      if (b.shield) {
+        ctx.strokeStyle = 'rgba(0, 255, 100, 0.6)';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(0, 0, b.radius + 10, 0, Math.PI * 2);
+        ctx.stroke();
+        
+        // Shield animation
+        ctx.strokeStyle = 'rgba(0, 255, 100, 0.3)';
+        ctx.beginPath();
+        ctx.arc(0, 0, b.radius + 15 + Math.sin(Date.now() * 0.01) * 3, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+
+      ctx.restore();
+    }
+
+    function drawObstacle(o) {
+      const { ctx } = state;
+      ctx.save();
+      ctx.translate(o.x, o.y);
+      ctx.rotate(o.rotation);
+
+      if (o.type === 'spike') {
+        ctx.fillStyle = CONFIG.COLORS.spike;
+        ctx.shadowColor = '#ff0000';
+        ctx.shadowBlur = 12;
+        ctx.beginPath();
+        ctx.moveTo(0, -o.height / 2);
+        ctx.lineTo(o.width / 2, o.height / 2);
+        ctx.lineTo(-o.width / 2, o.height / 2);
+        ctx.closePath();
+        ctx.fill();
+      } else {
+        ctx.fillStyle = CONFIG.COLORS.block;
+        ctx.shadowColor = '#8800ff';
+        ctx.shadowBlur = 10;
+        ctx.fillRect(-o.width / 2, -o.height / 2, o.width, o.height);
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(-o.width / 2, -o.height / 2, o.width, o.height);
+        
+        // Inner detail
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
+        ctx.fillRect(-o.width / 4, -o.height / 4, o.width / 2, o.height / 2);
+      }
+      ctx.restore();
+    }
+
+    function drawPowerUp(p) {
+      const { ctx } = state;
+      p.pulse += 0.08;
+      const pulseR = p.radius + Math.sin(p.pulse) * 4;
+      
+      const colors = { shield: CONFIG.COLORS.shield, slow: CONFIG.COLORS.slow, points: CONFIG.COLORS.points };
+      const labels = { shield: 'S', slow: '<<', points: '+100' };
+      
+      ctx.save();
+      ctx.translate(p.x, p.y);
+      
+      // Glow
+      ctx.shadowColor = colors[p.type];
+      ctx.shadowBlur = 15;
+      
+      // Circle
+      ctx.fillStyle = colors[p.type];
+      ctx.beginPath();
+      ctx.arc(0, 0, pulseR, 0, Math.PI * 2);
+      ctx.fill();
+      
+      // Label
+      ctx.shadowBlur = 0;
+      ctx.fillStyle = '#000';
+      ctx.font = 'bold 11px monospace';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(labels[p.type], 0, 0);
+      
+      ctx.restore();
+    }
+
+    // --- HUD Update ---
+    function updateHUD() {
+      ui.score.textContent = state.score;
+      ui.speed.textContent = state.speed + 'x';
+      const balloon = state.balloons[0];
+      ui.power.textContent = balloon && balloon.shield ? Math.ceil(balloon.shieldTime / 60) + 's' : '--';
+    }
+
+    // --- Game Loop ---
+    function gameLoop() {
       update();
-      draw();
-      if (gameRunning) animId = requestAnimationFrame(loop);
-      else draw(); // final frame with particles
+      render();
+      if (state.running) {
+        state.animId = requestAnimationFrame(gameLoop);
+      } else {
+        render(); // Final frame for particles
+      }
     }
 
-    // Initial draw
-    init();
-    draw();
+    function startGame() {
+      initAudio();
+      resetGame();
+      ui.overlay.classList.add('hidden');
+      ui.finalScore.classList.add('hidden');
+      ui.bestScore.classList.add('hidden');
+      ui.title.textContent = '🎈 Balloon Dodge';
+      ui.tagline.textContent = 'Dodge obstacles, collect power-ups!';
+      state.running = true;
+      gameLoop();
+    }
+
+    // --- Boot ---
+    window.addEventListener('DOMContentLoaded', init);
   </script>
 </body>
 </html>
