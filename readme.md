@@ -1,1 +1,1 @@
-a simple dodging game in html
+A simple dodging game in html>
