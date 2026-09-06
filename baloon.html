@@ -647,6 +647,30 @@
       gameLoop();
     }
 
+    // --- Keyboard Controls (Accessibility) ---
+    function handleKeyDown(e) {
+      const speed = 20;
+      switch(e.key) {
+        case 'ArrowUp':
+        case 'w':
+        case 'W':
+          state.input.y -= speed;
+          state.input.active = true;
+          e.preventDefault();
+          break;
+        case 'ArrowDown':
+        case 's':
+        case 'S':
+          state.input.y += speed;
+          state.input.active = true;
+          e.preventDefault();
+          break;
+      }
+      // Clamp to canvas bounds
+      state.input.y = Math.max(50, Math.min(state.height - 50, state.input.y));
+    }
+    document.addEventListener('keydown', handleKeyDown);
+
     // --- Boot ---
     window.addEventListener('DOMContentLoaded', init);
   </script>
