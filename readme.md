@@ -52,3 +52,7 @@ MIT License - see [LICENSE](LICENSE) file
 ## Contributing
 
 Contributions welcome! Please read [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+
+
+
+Thanks to all contributors!
