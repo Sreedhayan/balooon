@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Balloon Dodge Game</title>
+  <style>
+    body { margin: 0; background: black; overflow: hidden; }
+    canvas { display: block; margin: auto; background: black; }
+    #hud {
+      position: absolute; top: 10px; left: 50%; transform: translateX(-50%);
+      color: white; font: 20px monospace; text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <div id="hud">
+    <span id="score">Score: 0</span> | 
+    <span id="power">Power: None</span>
+  </div>
+  <canvas id="game"></canvas>
+
+  <script>
+  const canvas = document.getElementById("game");
+  const ctx = canvas.getContext("2d");
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+
+  let mouseY = canvas.height/2;
+  document.addEventListener("mousemove", e => mouseY = e.clientY);
+
+  let score = 0;
+  let obstacles = [];
+  let powerUps = [];
+  let decorations = [];
+  let balloon = {x:100, y:mouseY, r:20, shield:false};
+  let frame = 0;
+  let speed = 4;
+
+  function drawBalloon(){
+    ctx.save();
+    ctx.translate(balloon.x, balloon.y);
+    ctx.beginPath();
+    ctx.arc(0,0,balloon.r,0,Math.PI*2);
+    ctx.fillStyle = balloon.shield ? "lightgreen" : "white";
+    ctx.fill();
+    ctx.strokeStyle = "gray";
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  function addObstacle(){
+    let type = Math.random()<0.5 ? "spike":"block";
+    let size = 40 + Math.random()*40;
+    obstacles.push({
+      x: canvas.width+50, y: Math.random()*canvas.height,
+      w: size, h: size, type:type, vy: (Math.random()<0.5?1:-1)*(1+Math.random()*2)
+    });
+  }
+
+  function addPowerUp(){
+    let types = ["shield","slow","points"];
+    let type = types[Math.floor(Math.random()*types.length)];
+    powerUps.push({x:canvas.width+50, y:Math.random()*canvas.height, r:15, type:type});
+  }
+
+  function addDecoration(){
+    decorations.push({x:canvas.width+50, y:Math.random()*canvas.height, r:2+Math.random()*4});
+  }
+
+  function drawObstacles(){
+    ctx.fillStyle="white";
+    obstacles.forEach(o=>{
+      ctx.save();
+      ctx.translate(o.x,o.y);
+      if(o.type=="spike"){
+        ctx.beginPath();
+        ctx.moveTo(-o.w/2, o.h/2);
+        ctx.lineTo(0, -o.h/2);
+        ctx.lineTo(o.w/2, o.h/2);
+        ctx.closePath();
+        ctx.fill();
+      }else{
+        ctx.fillRect(-o.w/2,-o.h/2,o.w,o.h);
+      }
+      ctx.restore();
+    });
+  }
+
+  function drawPowerUps(){
+    powerUps.forEach(p=>{
+      ctx.beginPath();
+      ctx.arc(p.x,p.y,p.r,0,Math.PI*2);
+      ctx.fillStyle = p.type=="shield"?"green":p.type=="slow"?"blue":"yellow";
+      ctx.fill();
+    });
+  }
+
+  function drawDecorations(){
+    ctx.fillStyle="gray";
+    decorations.forEach(d=>{
+      ctx.beginPath();
+      ctx.arc(d.x,d.y,d.r,0,Math.PI*2);
+      ctx.fill();
+    });
+  }
+
+  function update(){
+    frame++;
+    balloon.y += (mouseY - balloon.y)*0.1;
+
+    if(frame%60===0) addObstacle();
+    if(frame%500===0) addPowerUp();
+    if(frame%20===0) addDecoration();
+
+    obstacles.forEach(o=>{
+      o.x -= speed;
+      o.y += o.vy;
+      if(o.y<20||o.y>canvas.height-20) o.vy*=-1;
+    });
+    obstacles = obstacles.filter(o=>o.x>-100);
+
+    powerUps.forEach(p=>p.x -= speed);
+    powerUps = powerUps.filter(p=>p.x>-50);
+
+    decorations.forEach(d=>d.x -= 1);
+    decorations = decorations.filter(d=>d.x>-10);
+
+    // collision
+    obstacles.forEach(o=>{
+      let dx = balloon.x - o.x;
+      let dy = balloon.y - o.y;
+      if(Math.abs(dx)<balloon.r+o.w/2 && Math.abs(dy)<balloon.r+o.h/2){
+        if(balloon.shield){
+          balloon.shield=false;
+        }else{
+          alert("Game Over! Final Score: "+score);
+          document.location.reload();
+        }
+      }
+    });
+
+    powerUps.forEach((p,i)=>{
+      let dx = balloon.x-p.x;
+      let dy = balloon.y-p.y;
+      if(Math.hypot(dx,dy)<balloon.r+p.r){
+        if(p.type=="shield"){ balloon.shield=true; }
+        else if(p.type=="slow"){ speed=Math.max(2,speed-1); setTimeout(()=>speed+=1,5000);}
+        else if(p.type=="points"){ score+=100; }
+        powerUps.splice(i,1);
+      }
+    });
+
+    score++;
+    if(frame%600===0) speed++;
+  }
+
+  function draw(){
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    drawDecorations();
+    drawBalloon();
+    drawObstacles();
+    drawPowerUps();
+    document.getElementById("score").textContent="Score: "+score;
+    document.getElementById("power").textContent="Power: "+(balloon.shield?"Shield":"None");
+  }
+
+  function loop(){
+    update();
+    draw();
+    requestAnimationFrame(loop);
+  }
+
+  loop();
+  </script>
+</body>
+</html>
